@@ -1,5 +1,7 @@
 # PassGAN
 
+# Active work, don't use unless you enjoy pain...
+
 
 This repository is updated version of [@brannondorsey/PassGAN](https://github.com/brannondorsey/PassGAN) for Python 3 & TensorFlow 1.13, contains code for the [_PassGAN: A Deep Learning Approach for Password Guessing_](https://arxiv.org/abs/1709.00440) paper. 
 
