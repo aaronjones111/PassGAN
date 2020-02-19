@@ -78,12 +78,12 @@ def parse_args():
     return parser.parse_args()
 
 args = parse_args()
-
+print("loading data")
 lines, charmap, inv_charmap = utils.load_dataset(
     path=args.training_data,
     max_length=args.seq_length)
 
-
+print("pickeling...")
 # Pickle to avoid encoding errors with json
 with open(os.path.join(args.output_dir, 'charmap.pickle'), 'wb') as f:
     pickle.dump(charmap, f)
@@ -105,6 +105,7 @@ disc_fake = models.Discriminator(fake_inputs, args.seq_length, args.layer_dim, l
 disc_cost = tf.reduce_mean(disc_fake) - tf.reduce_mean(disc_real)
 gen_cost = -tf.reduce_mean(disc_fake)
 
+print("alpha mixing?")
 # WGAN lipschitz-penalty
 alpha = tf.random_uniform(
     shape=[args.batch_size,1,1],
@@ -112,21 +113,33 @@ alpha = tf.random_uniform(
     maxval=1.
 )
 
+print("generating params")
+print("differences..")
 differences = fake_inputs - real_inputs
+print("interpolates..")
 interpolates = real_inputs + (alpha*differences)
+print("gradients")
 gradients = tf.gradients(models.Discriminator(interpolates, args.seq_length, args.layer_dim, len(charmap)), [interpolates])[0]
+print("slopes")
 slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1,2]))
+print("gradient penalty")
 gradient_penalty = tf.reduce_mean((slopes-1.)**2)
 disc_cost += args.lamb * gradient_penalty
 
+print("generator and discriminator params...")
 gen_params = lib.params_with_name('Generator')
 disc_params = lib.params_with_name('Discriminator')
 
+print("Adamoptimizers...")
+print("train op")
 gen_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(gen_cost, var_list=gen_params)
+print("Disc op")
 disc_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(disc_cost, var_list=disc_params)
+print("Adam done...")
 
 # Dataset iterator
 def inf_train_gen():
+    print("shuffleling iterator")
     while True:
         np.random.shuffle(lines)
         for i in range(0, len(lines)-args.batch_size+1, args.batch_size):
@@ -138,7 +151,9 @@ def inf_train_gen():
 # During training we monitor JS divergence between the true & generated ngram
 # distributions for n=1,2,3,4. To get an idea of the optimal values, we
 # evaluate these statistics on a held-out set first.
+print("moedling language...")
 true_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[10*args.batch_size:], tokenize=False) for i in range(4)]
+print("validation car ngrams...")
 validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[:10*args.batch_size], tokenize=False) for i in range(4)]
 for i in range(4):
     print("validation set JSD for n={}: {}".format(i+1, true_char_ngram_lms[i].js_with(validation_char_ngram_lms[i])))
@@ -199,7 +214,7 @@ with tf.Session() as session:
                 lm = utils.NgramLanguageModel(i+1, samples, tokenize=False)
                 lib.plot.plot('js{}'.format(i+1), lm.js_with(true_char_ngram_lms[i]))
 
-            with open(os.path.join(args.output_dir, 'samples', 'samples_{}.txt').format(iteration), 'w') as f:
+            with open(os.path.join(args.output_dir, 'samples', 'samples_{}.txt').format(iteration), 'w', encoding="utf-8") as f:
                 for s in samples:
                     s = "".join(s)
                     f.write(s + "\n")
@@ -216,7 +231,6 @@ with tf.Session() as session:
             lib.plot.flush()
 
         lib.plot.tick()
-        
 # Time stamp
 localtime = time.asctime( time.localtime(time.time()) )
 print("Ending TensorFlow session.")
