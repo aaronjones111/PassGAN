@@ -1,5 +1,5 @@
 # Libraries
-import os
+import os, sys
 import time
 import pickle
 import argparse
@@ -80,7 +80,14 @@ def parse_args():
 
     return args
 
+def errmsg(message):
+    #easy print to stderr
+    #non captured messages...
+    print("\033[94m"+message+"\033[0m", file=sys.stderr)
+
 args = parse_args()
+
+
 
 # Dictionary
 with open(os.path.join(args.input_dir, 'charmap.pickle'), 'rb') as f:
@@ -90,15 +97,20 @@ with open(os.path.join(args.input_dir, 'charmap.pickle'), 'rb') as f:
 with open(os.path.join(args.input_dir, 'charmap_inv.pickle'), 'rb') as f:
     inv_charmap = pickle.load(f, encoding='latin1')
     
-    
+errmsg("fakeinput generator")
 fake_inputs = models.Generator(args.batch_size, args.seq_length, args.layer_dim, len(charmap))
 
 with tf.Session() as session:
+    #open a named pipe to cleanly communicate with hashcat
+    # maybe
+    f = open("pipe", 'w', encoding="utf-8")
 
     def generate_samples():
+        errmsg("generate samples")
         samples = session.run(fake_inputs)
         samples = np.argmax(samples, axis=2)
         decoded_samples = []
+        errmsg("decoding")
         for i in range(len(samples)):
             decoded = []
             for j in range(len(samples[i])):
@@ -107,11 +119,20 @@ with tf.Session() as session:
         return decoded_samples
 
     def save(samples):
-        with open(args.output, 'a') as f:
+        with open(args.output, 'a', encoding="utf-8") as f:
                 for s in samples:
                     s = "".join(s).replace('`', '')
                     f.write(s + "\n")
+    def printpass(samples):
+        for s in samples:
+            print("".join(s).replace('`', ''))
+    
+    def hcpipe(samples):
+        for s in samples:
+            s = "".join(s).replace('`', '')
+            f.write(s + "\n")
 
+    errmsg("loading checkpoint")
     saver = tf.train.Saver()
     saver.restore(session, args.checkpoint)
 
@@ -119,17 +140,9 @@ with tf.Session() as session:
     then = time.time()
     start = time.time()
     for i in range(int(args.num_samples / args.batch_size)):
-        
-        samples.extend(generate_samples())
+        stuff = generate_samples()
+        #samples.extend(stuff)
+        #printpass(stuff)
+        hcpipe(stuff)
 
-        # append to output file every 1000 batches
-        if i % 1000 == 0 and i > 0: 
-            
-            save(samples)
-            samples = [] # flush
-
-            print('wrote {} samples to {} in {:.2f} seconds. {} total.'.format(1000 * args.batch_size, args.output, time.time() - then, i * args.batch_size))
-            then = time.time()
-    
-    save(samples)
-print('\nFinished in {:.2f} seconds'.format(time.time() - start))
+errmsg('\nFinished in {:.2f} seconds'.format(time.time() - start))
