@@ -11,7 +11,7 @@ import tflib as lib
 import tflib.ops.linear
 import tflib.ops.conv1d
 import utils
-import models
+import models3 as models
 
 '''
 python sample.py \
@@ -21,8 +21,10 @@ python sample.py \
 	--batch-size 1024 \
 	--num-samples 1000000
 
-python sample2.py --input-dir rockyou --checkpoint rockyou/checkpoints/checkpoint_200000.ckpt --output generated_pass5.txt --batch-size 1024 --num-samples 10000 -l 27
 
+python sample3.py --input-dir rockyou --checkpoint rockyou/checkpoints/checkpoint_200000.ckpt --output generated_pass5.txt --batch-size 1024 --num-samples 10000 -l 27
+
+python sample3.py --input-dir rockyou --checkpoint rockyou/checkpoints/checkpoint_200000.ckpt --output generated_pass5.txt --batch-size 1024 --num-samples 10000 -l 27
 '''
 
 
@@ -110,7 +112,7 @@ print(fake_inputs)
 with tf.Session() as session:
     #open a named pipe to cleanly communicate with hashcat
     # maybe
-    f = open("pipe", 'w', 1, encoding="utf-8")
+    #f = open("pipe", 'w', 1, encoding="utf-8")
 
     def generate_samples():
         errmsg("generate samples")

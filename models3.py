@@ -3,6 +3,12 @@ import tflib as lib
 import tflib.ops.linear
 import tflib.ops.conv1d
 
+"""
+Use this file for experimenting
+
+companion to samples3.py
+"""
+
 def ResBlock(name, inputs, dim):
     # print("- Creating ResBlock -")
     output = inputs
@@ -16,11 +22,11 @@ def ResBlock(name, inputs, dim):
 def Generator(n_samples, seq_len, layer_dim, output_dim, prev_outputs=None):
     print("- Creating Generator -")
     output = make_noise(shape=[n_samples, 128])
-    # print("Initialized:", output)
+    print("Initialized:", output)
     output = lib.ops.linear.Linear('Generator.Input', 128, seq_len * layer_dim, output)
-    # print("Lineared:", output)
+    print("Lineared:", output)
     output = tf.reshape(output, [-1, seq_len, layer_dim,])
-    # print("Reshaped:", output)
+    print("Reshaped:", output)
     output = ResBlock('Generator.1', output, layer_dim)
     output = ResBlock('Generator.2', output, layer_dim)
     output = ResBlock('Generator.3', output, layer_dim)
