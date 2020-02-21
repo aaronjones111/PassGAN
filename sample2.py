@@ -13,6 +13,9 @@ import tflib.ops.conv1d
 import utils
 import models
 
+from unicodedata import normalize
+import string, random
+
 '''
 python sample.py \
 	--input-dir pretrained \
@@ -104,8 +107,32 @@ errmsg("fakeinput generator")
 fake_inputs = models.Generator(args.batch_size, args.seq_length, args.layer_dim, len(charmap))
 
 print(inv_charmap)
+#print(charmap)
 print(fake_inputs)
 
+x = ''
+r = b''
+
+if x == '':
+    print(("x is empty"))
+if r == b'':
+    print(("r is empty"))
+if r == None:
+    print(("r is None"))
+
+#yolo
+for i in inv_charmap:
+    #print(normalize('NFC', i))
+    #print(normalize('NFKC', i))
+    #print(normalize('NFD', i))
+    w = normalize('NFKD', i).encode('ascii','ignore')
+    print(w)
+    if w == b'':
+        for x in range(len(inv_charmap)):
+            if inv_charmap[x] == i:
+                inv_charmap[x] = random.choice(string.printable)
+
+print(inv_charmap)
 
 with tf.Session() as session:
     #open a named pipe to cleanly communicate with hashcat

@@ -24,7 +24,7 @@ python sample.py \
 
 python sample3.py --input-dir rockyou --checkpoint rockyou/checkpoints/checkpoint_200000.ckpt --output generated_pass5.txt --batch-size 1024 --num-samples 10000 -l 27
 
-python sample3.py --input-dir rockyou --checkpoint rockyou/checkpoints/checkpoint_200000.ckpt --output generated_pass5.txt --batch-size 1024 --num-samples 10000 -l 27
+python sample3.py --input-dir rockyou --checkpoint rockyou/checkpoints/checkpoint_200000.ckpt --output generated_pass5.txt --batch-size 64 --num-samples 10000 -l 27
 '''
 
 
@@ -105,8 +105,8 @@ with open(os.path.join(args.input_dir, 'charmap_inv.pickle'), 'rb') as f:
 errmsg("fakeinput generator")
 fake_inputs = models.Generator(args.batch_size, args.seq_length, args.layer_dim, len(charmap))
 
-print(inv_charmap)
-print(fake_inputs)
+#print(inv_charmap)
+#print(fake_inputs)
 
 
 with tf.Session() as session:
@@ -117,7 +117,10 @@ with tf.Session() as session:
     def generate_samples():
         errmsg("generate samples")
         samples = session.run(fake_inputs)
+        #print(samples)
+        errmsg("argmax..")
         samples = np.argmax(samples, axis=2)
+        #print(samples)
         decoded_samples = []
         errmsg("decoding")
         for i in range(len(samples)):
@@ -170,11 +173,13 @@ with tf.Session() as session:
     for i in range(int(args.num_samples / args.batch_size)):
         stuff = generate_samples()
         #samples.extend(stuff)
-        #printpass(stuff)
-        hcpipe(stuff)
+        printpass(stuff)
+        #hcpipe(stuff)
     
     #stuff = speed_samples()
     #printpass(stuff)
+    #print(fake_inputs.output.op.name)
+
 
 
 errmsg('\nFinished in {:.2f} seconds'.format(time.time() - start))
