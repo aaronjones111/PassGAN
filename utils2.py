@@ -7,6 +7,8 @@ def tokenize_string(sample):
 
 class NgramLanguageModel(object):
     def __init__(self, n, samples, tokenize=False):
+        print("NgramlaguageModel")
+        print("samples to process: {}".format(len(samples)))
         if tokenize:
             tokenized_samples = []
             for sample in samples:
@@ -18,19 +20,14 @@ class NgramLanguageModel(object):
         self._ngram_counts = collections.defaultdict(int)
         self._total_ngrams = 0
         for ngram in self.ngrams():
-            print("ngram...")
-            print(ngram)
+            #print("this takes forever?")
             self._ngram_counts[ngram] += 1
             self._total_ngrams += 1
 
     def ngrams(self):
         n = self._n
         for sample in self._samples:
-            #print(sample)
             for i in range(len(sample)-n+1):
-                print("rawsample!@#!#!")
-                print(sample[i:i+n])
-                print("rawsample!@#!#!")
                 yield sample[i:i+n]
 
     def unique_ngrams(self):
@@ -108,27 +105,28 @@ def load_dataset(path, max_length, tokenize=False, max_vocab_size=2048):
                 continue # don't include this sample, its too long
 
             # right pad with ` character
-            #print(line)
-            #print(line + ( ("`",)*(max_length-len(line)) ))
             lines.append(line + ( ("`",)*(max_length-len(line)) ) )
     print("done loading")
-    np.random.shuffle(lines)
+    np.random.shuffle(lines) #what the shit is this for? Why? it's all used and randomly sampled later...
 
     import collections
     print("counting chars..")
-    counts = collections.Counter(char for line in lines for char in line)
+    #this can be done while loading
+    counts = collections.Counter(char for line in lines for char in line) 
 
     charmap = {'unk':0}
     inv_charmap = ['unk']
     print("building charmap")
+
+    #wot? Some weird mapping I won't mess with
     for char,count in counts.most_common(max_vocab_size-1):
         if char not in charmap:
             charmap[char] = len(inv_charmap)
             inv_charmap.append(char)
-    for i in range(1):
-        print(lines[i])
-        
+
     filtered_lines = []
+    #this makes no sense for this purpose... when are we going to have a charmap over 2k & need to INDIVIDUALLY filter every charactor?
+    # now we get 2 copies of the exploded wordlist, dafuq!
     for line in lines:
         filtered_line = []
         for char in line:
@@ -138,8 +136,8 @@ def load_dataset(path, max_length, tokenize=False, max_vocab_size=2048):
                 filtered_line.append('unk')
         filtered_lines.append(tuple(filtered_line))
 
-    for i in range(10):
-        print(filtered_lines[i])
+    # for i in range(100):
+    #     print filtered_lines[i]
 
     print("loaded {} lines in dataset".format(len(lines)))
     return filtered_lines, charmap, inv_charmap

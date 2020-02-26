@@ -105,7 +105,8 @@ with open(os.path.join(args.input_dir, 'charmap_inv.pickle'), 'rb') as f:
     
 errmsg("fakeinput generator")
 fake_inputs = models.Generator(args.batch_size, args.seq_length, args.layer_dim, len(charmap))
-
+""" 
+### use to fudge charmaps
 print(inv_charmap)
 #print(charmap)
 print(fake_inputs)
@@ -133,7 +134,8 @@ for i in inv_charmap:
                 inv_charmap[x] = random.choice(string.printable)
 
 print(inv_charmap)
-
+####
+"""
 with tf.Session() as session:
     #open a named pipe to cleanly communicate with hashcat
     # maybe

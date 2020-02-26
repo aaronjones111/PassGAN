@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-import utils
+import utils2 as utils
 import tflib as lib
 import tflib.ops.linear
 import tflib.ops.conv1d
@@ -87,9 +87,11 @@ print("pickeling...")
 # Pickle to avoid encoding errors with json
 with open(os.path.join(args.output_dir, 'charmap.pickle'), 'wb') as f:
     pickle.dump(charmap, f)
+    f.close()
 
 with open(os.path.join(args.output_dir, 'charmap_inv.pickle'), 'wb') as f:
     pickle.dump(inv_charmap, f)
+    f.close()
     
 print("Number of unique characters in dataset: {}".format(len(charmap)))
 
@@ -157,6 +159,8 @@ print("validation car ngrams...")
 validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[:10*args.batch_size], tokenize=False) for i in range(4)]
 for i in range(4):
     print("validation set JSD for n={}: {}".format(i+1, true_char_ngram_lms[i].js_with(validation_char_ngram_lms[i])))
+#ug.. can we use a gpu for this??
+print("modeling again with all dict?")
 true_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines, tokenize=False) for i in range(4)]
 
 
@@ -186,22 +190,31 @@ with tf.Session() as session:
         return decoded_samples
 
     gen = inf_train_gen()
+    print("HUZZAH")
+    print(next(gen))
+    print(next(gen))
+    print(next(gen))
+    print(next(gen))
+    print("HUZZAH")
 
     for iteration in range(args.iters + 1):
         start_time = time.time()
 
         # Train generator
+        print("Training Generator")
         if iteration > 0:
             _ = session.run(gen_train_op)
 
         # Train critic
+        print("Training Critic")
         for i in range(args.critic_iters):
             _data = next(gen)
+            #print(_data)
             _disc_cost, _ = session.run(
                 [disc_cost, disc_train_op],
                 feed_dict={real_inputs_discrete:_data}
             )
-
+        print("making plots..")
         lib.plot.output_dir = args.output_dir
         lib.plot.plot('time', time.time() - start_time)
         lib.plot.plot('train disc cost', _disc_cost)

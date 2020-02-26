@@ -5,3 +5,4 @@ FROM tensorflow/tensorflow:1.13.1-gpu-py3
 #Add some stuff we need
 RUN pip install --upgrade pip
 RUN pip install matplotlib
+RUN pip install keras

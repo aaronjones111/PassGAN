@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-import utils
+import filebasedutils as utils
 import tflib as lib
 import tflib.ops.linear
 import tflib.ops.conv1d
@@ -79,9 +79,44 @@ def parse_args():
 
 args = parse_args()
 print("loading data")
-lines, charmap, inv_charmap = utils.load_dataset(
-    path=args.training_data,
-    max_length=args.seq_length)
+
+#reuse charmap if exists, this can take an insane amount of time to process.
+
+### Dictionary
+if os.path.exists(os.path.join(args.output_dir, 'charmap.pickle')) and os.path.exists(os.path.join(args.output_dir, 'charmap_inv.pickle')):
+    with open(os.path.join(args.output_dir, 'charmap.pickle'), 'rb') as f:
+        charmap = pickle.load(f, encoding='latin1')
+
+    # Reverse-Dictionary
+    with open(os.path.join(args.output_dir, 'charmap_inv.pickle'), 'rb') as f:
+        inv_charmap = pickle.load(f, encoding='latin1')
+
+
+
+else:
+    lines, charmap, inv_charmap = utils.load_dataset(
+        path=args.training_data,
+        max_length=args.seq_length)
+
+
+
+lines = tf.data.TextLineDataset(args.training_data)
+#lines = lines.map(lambda string: (tf.string_split([string], delimiter="").values))
+#lines = lines.padded_batch(args.batch_size, padded_shapes=args.seq_length, padding_values="`")
+#lines = lines.map(lambda l: ([charmap[c] for c in l]))
+lines = lines.batch(args.batch_size)
+#lines = lines.shuffle(buffer_size=args.batch_size*2)
+lines = lines.prefetch(buffer_size=1)
+
+iterator = lines.make_one_shot_iterator()
+next_element = iterator.get_next()
+
+######
+
+#print(lines[1:20])
+
+#lines need to be array of tuplets, each tuplet a word broken into a list padded with "`" to max length.
+# eg ('k', 'o', 'o', 'l', 'k', 'a', 't', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`', '`')
 
 print("pickeling...")
 # Pickle to avoid encoding errors with json
@@ -139,6 +174,7 @@ print("Disc op")
 disc_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(disc_cost, var_list=disc_params)
 print("Adam done...")
 
+''' # old iterator
 # Dataset iterator
 def inf_train_gen():
     print("shuffleling iterator")
@@ -149,21 +185,37 @@ def inf_train_gen():
                 [[charmap[c] for c in l] for l in lines[i:i+args.batch_size]],
                 dtype='int32'
             )
-            
+'''
+
+
+#grab sample for initial ngram test
+datapump = tf.Session()
+g = []
+for i in range(10):
+    print(i)
+    g.extend(datapump.run(next_element))
+
+validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, g, tokenize=False) for i in range(4)]
 # During training we monitor JS divergence between the true & generated ngram
 # distributions for n=1,2,3,4. To get an idea of the optimal values, we
 # evaluate these statistics on a held-out set first.
 print("moedling language...")
-true_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[10*args.batch_size:], tokenize=False) for i in range(4)]
+true_char_ngram_lms = [utils.FileNgramLanguageModel(i+1, args.training_data,  args.batch_size, tokenize=False) for i in range(4)]
+
 print("validation car ngrams...")
-validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[:10*args.batch_size], tokenize=False) for i in range(4)]
+#validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[:10*args.batch_size], tokenize=False) for i in range(4)]
+validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, g, tokenize=False) for i in range(4)]
+
 for i in range(4):
     print("validation set JSD for n={}: {}".format(i+1, true_char_ngram_lms[i].js_with(validation_char_ngram_lms[i])))
-true_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines, tokenize=False) for i in range(4)]
+#ug.. can we use a gpu for this??
+print("modeling again with all dict?")
+#true_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines, tokenize=False) for i in range(4)]
 
 
 # TensorFlow Session
 with tf.Session() as session:
+#with tf.distribute.MirroredStrategy() as session:
 
     # Time stamp
     localtime = time.asctime( time.localtime(time.time()) )
@@ -172,6 +224,18 @@ with tf.Session() as session:
     
     # Start TensorFlow session...
     session.run(tf.global_variables_initializer())
+
+    # Dataset iterator
+    def inf_train_gen():
+        print("shuffleling iterator")
+
+        while True:
+            np.random.shuffle(lines)
+            for i in range(0, len(lines)-args.batch_size+1, args.batch_size):
+                yield np.array(
+                    [[charmap[c] for c in l] for l in lines[i:i+args.batch_size]],
+                    dtype='int32'
+                )
 
     def generate_samples():
         samples = session.run(fake_inputs)
@@ -185,22 +249,31 @@ with tf.Session() as session:
         return decoded_samples
 
     gen = inf_train_gen()
+    print("HUZZAH")
+    print(next(gen))
+    print(next(gen))
+    print(next(gen))
+    print(next(gen))
+    print("HUZZAH")
 
     for iteration in range(args.iters + 1):
         start_time = time.time()
 
         # Train generator
+        print("Training Generator")
         if iteration > 0:
             _ = session.run(gen_train_op)
 
         # Train critic
+        print("Training Critic")
         for i in range(args.critic_iters):
             _data = next(gen)
+            #print(_data)
             _disc_cost, _ = session.run(
                 [disc_cost, disc_train_op],
                 feed_dict={real_inputs_discrete:_data}
             )
-
+        print("making plots..")
         lib.plot.output_dir = args.output_dir
         lib.plot.plot('time', time.time() - start_time)
         lib.plot.plot('train disc cost', _disc_cost)
