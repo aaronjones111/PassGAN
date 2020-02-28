@@ -84,7 +84,9 @@ lines, charmap, inv_charmap = utils.load_dataset(
     max_length=args.seq_length)
 
 print("pickeling...")
-# Pickle to avoid encoding errors with json
+
+
+########### Pickle to avoid encoding errors with json
 with open(os.path.join(args.output_dir, 'charmap.pickle'), 'wb') as f:
     pickle.dump(charmap, f)
 
@@ -93,6 +95,8 @@ with open(os.path.join(args.output_dir, 'charmap_inv.pickle'), 'wb') as f:
     
 print("Number of unique characters in dataset: {}".format(len(charmap)))
 
+############################################
+#TF creation
 real_inputs_discrete = tf.placeholder(tf.int32, shape=[args.batch_size, args.seq_length])
 real_inputs = tf.one_hot(real_inputs_discrete, len(charmap))
 

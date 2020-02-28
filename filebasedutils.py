@@ -24,6 +24,7 @@ class NgramLanguageModel(object):
             #print(ngrams)
             self._ngram_counts[ngram] += 1
             self._total_ngrams += 1
+        print("Total ngrams: {}".format(self._total_ngrams))
 
     def ngrams(self):
         n = self._n
@@ -92,7 +93,7 @@ class NgramLanguageModel(object):
 class FileNgramLanguageModel(object):
     #Gnererate 
     def __init__(self, n, samples, max_length, tokenize=False):
-        print("FileNgramlaguageModel")
+        print("Initializing FileNgramlaguageModel")
         print("uSingFile: {}".format(samples))
         if tokenize:
             tokenized_samples = []
@@ -107,18 +108,21 @@ class FileNgramLanguageModel(object):
         self._total_ngrams = 0
         for ngram in self.ngrams():
             #print("this takes forever?")
-            print(ngram)
+            #print(ngram)
             self._ngram_counts[ngram] += 1
             self._total_ngrams += 1
-            print(self._total_ngrams)
+        print("Total ngrams: {}".format(self._total_ngrams))
+        samples.close()
 
     def ngrams(self):
         n = self._n
+        #This is meant to handle directly reading lines from files & normalizeing in a TF kinda way
+        sampledlines=0
         for sample in self._samples:
             sample=self._samples.readline()
-            if len(sample) < 2:
-                print("RRRRRRRRRRRRRRRRRRRRRRRAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-                return
+            sampledlines += 1
+            if sampledlines % 100000 == 0:
+                print("Sampled lines for ngram: {}".format(sampledlines))
             sample = sample[:-1]
             sample = tuple(sample)
             sample = (sample + ( ("`",)*(self._max_length-len(sample)) ) )
@@ -128,7 +132,8 @@ class FileNgramLanguageModel(object):
                 #print(sample[i:i+n])
                 #print("rawsample!@#!#!")
                 yield sample[i:i+n]
-            """
+        
+        """
         while x <=n:
             line=self._samples.readline()
             line = line[:-1]
@@ -137,7 +142,7 @@ class FileNgramLanguageModel(object):
             retsamp.append(line + ( ("`",)*(self._max_length-len(line)) ) )
             x+=1
             # lines.append(line + ( ("`",)*(max_length-len(line)) ) )
-            """
+         """
 
     def unique_ngrams(self):
         return set(self._ngram_counts.keys())
@@ -201,6 +206,7 @@ class FileNgramLanguageModel(object):
 def load_dataset(path, max_length, tokenize=False, max_vocab_size=2048):
     import collections
     print("Load dataset, might blowup")
+    print("Using file: {} for dataset.".format(path))
     lines = []
     linecount = 0
     counts = collections.Counter()

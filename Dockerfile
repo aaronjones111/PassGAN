@@ -6,3 +6,4 @@ FROM tensorflow/tensorflow:1.13.1-gpu-py3
 RUN pip install --upgrade pip
 RUN pip install matplotlib
 RUN pip install keras
+RUN pip install dill

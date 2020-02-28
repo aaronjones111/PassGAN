@@ -18,8 +18,8 @@ class NgramLanguageModel(object):
         self._ngram_counts = collections.defaultdict(int)
         self._total_ngrams = 0
         for ngram in self.ngrams():
-            print("ngram...")
-            print(ngram)
+            #print("ngram...")
+            #print(ngram)
             self._ngram_counts[ngram] += 1
             self._total_ngrams += 1
 
@@ -28,9 +28,9 @@ class NgramLanguageModel(object):
         for sample in self._samples:
             #print(sample)
             for i in range(len(sample)-n+1):
-                print("rawsample!@#!#!")
-                print(sample[i:i+n])
-                print("rawsample!@#!#!")
+                #print("rawsample!@#!#!")
+                #print(sample[i:i+n])
+                #print("rawsample!@#!#!")
                 yield sample[i:i+n]
 
     def unique_ngrams(self):

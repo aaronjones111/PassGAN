@@ -2,7 +2,7 @@ import os, sys
 sys.path.append(os.getcwd())
 
 import time
-import pickle
+import pickle, dill
 import argparse
 import numpy as np
 import tensorflow as tf
@@ -27,6 +27,11 @@ def parse_args():
                         default='data/train.txt',
                         dest='training_data',
                         help='Path to training data file (one password per line) (default: data/train.txt)')
+    
+    parser.add_argument('--shard-data', '-sh',
+                        default=None,
+                        dest='shard_data',
+                        help='Path to training shard folder. All files will be read. Large wordlists need to be broken up into many smaller files.')
 
     parser.add_argument('--output-dir', '-o',
                         required=True,
@@ -81,9 +86,9 @@ args = parse_args()
 print("loading data")
 
 #reuse charmap if exists, this can take an insane amount of time to process.
-
 ### Dictionary
 if os.path.exists(os.path.join(args.output_dir, 'charmap.pickle')) and os.path.exists(os.path.join(args.output_dir, 'charmap_inv.pickle')):
+    print("Charmaps found, loading...")
     with open(os.path.join(args.output_dir, 'charmap.pickle'), 'rb') as f:
         charmap = pickle.load(f, encoding='latin1')
 
@@ -91,25 +96,38 @@ if os.path.exists(os.path.join(args.output_dir, 'charmap.pickle')) and os.path.e
     with open(os.path.join(args.output_dir, 'charmap_inv.pickle'), 'rb') as f:
         inv_charmap = pickle.load(f, encoding='latin1')
 
-
-
 else:
+    print("No charmaps found in target directory, generating.")
     lines, charmap, inv_charmap = utils.load_dataset(
         path=args.training_data,
         max_length=args.seq_length)
 
+def splitter(wordline):
+    # This is a string tensor coming in
+    # Has to be called from tf.py_function to have access to the numpy *REQUIRED*
+    # convert to simple python string:
+    px = wordline.numpy().decode('utf-8')
+    #use a constructor to loop over the string into a list and return a new tensor
+    #return tf.convert_to_tensor([char for char in px])
 
+    t = tf.convert_to_tensor(list(str(px)), dtype=tf.string)
+    return t
 
-lines = tf.data.TextLineDataset(args.training_data)
-#lines = lines.map(lambda string: (tf.string_split([string], delimiter="").values))
-#lines = lines.padded_batch(args.batch_size, padded_shapes=args.seq_length, padding_values="`")
-#lines = lines.map(lambda l: ([charmap[c] for c in l]))
-lines = lines.batch(args.batch_size)
-#lines = lines.shuffle(buffer_size=args.batch_size*2)
+if args.shard_data:
+    files = tf.data.Dataset.list_files(args.shard_data+"*")
+    lines = files.interleave(lambda x: tf.data.TextLineDataset(x), cycle_length=20) #cyclelength is number of cuncurrent files to read
+else:
+    lines = tf.data.TextLineDataset(args.training_data)
+
+lines = lines.map(lambda x: tf.py_function(func=splitter, inp=[x], Tout=tf.string)) #magic sauce to get pythonic string splitting
+lines = lines.padded_batch(args.batch_size, padded_shapes=args.seq_length, padding_values="`")
+
 lines = lines.prefetch(buffer_size=1)
 
-iterator = lines.make_one_shot_iterator()
-next_element = iterator.get_next()
+#iterator = lines.make_one_shot_iterator()
+iterator = lines.make_initializable_iterator()
+#iterator.initializer()
+#next_element = iterator.get_next()
 
 ######
 
@@ -174,37 +192,45 @@ print("Disc op")
 disc_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(disc_cost, var_list=disc_params)
 print("Adam done...")
 
-''' # old iterator
-# Dataset iterator
-def inf_train_gen():
-    print("shuffleling iterator")
-    while True:
-        np.random.shuffle(lines)
-        for i in range(0, len(lines)-args.batch_size+1, args.batch_size):
-            yield np.array(
-                [[charmap[c] for c in l] for l in lines[i:i+args.batch_size]],
-                dtype='int32'
-            )
-'''
-
-
 #grab sample for initial ngram test
 datapump = tf.Session()
+datapump.run(iterator.initializer)
+next_element = iterator.get_next()
 g = []
 for i in range(10):
-    print(i)
-    g.extend(datapump.run(next_element))
-
-validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, g, tokenize=False) for i in range(4)]
+    #sample for ngram baseline
+    fl = datapump.run(next_element).tolist()
+    for r in fl:
+        g.append(tuple(l.decode('UTF-8') for l in r))
+#print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+#print(g)
+#print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+#validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, g, tokenize=False) for i in range(4)]
 # During training we monitor JS divergence between the true & generated ngram
 # distributions for n=1,2,3,4. To get an idea of the optimal values, we
 # evaluate these statistics on a held-out set first.
 print("moedling language...")
-true_char_ngram_lms = [utils.FileNgramLanguageModel(i+1, args.training_data,  args.batch_size, tokenize=False) for i in range(4)]
 
+
+if os.path.exists(os.path.join(args.output_dir, 'true_char_ngram_lms.pickle')):
+    print("Model found, loading...")
+    with open(os.path.join(args.output_dir, 'true_char_ngram_lms.pickle'), 'rb') as f:
+        true_char_ngram_lms = dill.load(f, encoding='latin1')
+
+else:
+    print("No ngram model found in target directory, generating.")
+    true_char_ngram_lms = [utils.FileNgramLanguageModel(i+1, args.training_data,  args.batch_size, tokenize=False) for i in range(4)]
+    print("Saving char ngram pickle")
+    with open(os.path.join(args.output_dir, 'true_char_ngram_lms.pickle'), 'wb') as f:
+        dill.dump(true_char_ngram_lms, f)
+        f.close()
+
+print(true_char_ngram_lms)
 print("validation car ngrams...")
 #validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, lines[:10*args.batch_size], tokenize=False) for i in range(4)]
 validation_char_ngram_lms = [utils.NgramLanguageModel(i+1, g, tokenize=False) for i in range(4)]
+
+#print(g)
 
 for i in range(4):
     print("validation set JSD for n={}: {}".format(i+1, true_char_ngram_lms[i].js_with(validation_char_ngram_lms[i])))
@@ -216,6 +242,7 @@ print("modeling again with all dict?")
 # TensorFlow Session
 with tf.Session() as session:
 #with tf.distribute.MirroredStrategy() as session:
+    
 
     # Time stamp
     localtime = time.asctime( time.localtime(time.time()) )
@@ -224,8 +251,12 @@ with tf.Session() as session:
     
     # Start TensorFlow session...
     session.run(tf.global_variables_initializer())
+    session.run(iterator.initializer)
+    next_element = iterator.get_next() #Tf yelled at me to use this only outside training loops
 
     # Dataset iterator
+    '''
+    #old
     def inf_train_gen():
         print("shuffleling iterator")
 
@@ -236,6 +267,26 @@ with tf.Session() as session:
                     [[charmap[c] for c in l] for l in lines[i:i+args.batch_size]],
                     dtype='int32'
                 )
+    '''
+    def inf_train_gen():
+        print("shuffleling iterator")
+        while True:
+            
+            data =session.run(next_element).tolist()
+            
+            dd=[]
+
+            for word in data:
+                try:
+                    dd.append([charmap[l.decode('UTF-8')] for l in word])
+                except:
+                    print(word)
+                    print(charmap)
+                    quit()
+            yield dd
+
+            #yield np.array(dd, dtype='int32')
+
 
     def generate_samples():
         samples = session.run(fake_inputs)
@@ -269,10 +320,16 @@ with tf.Session() as session:
         for i in range(args.critic_iters):
             _data = next(gen)
             #print(_data)
-            _disc_cost, _ = session.run(
-                [disc_cost, disc_train_op],
-                feed_dict={real_inputs_discrete:_data}
-            )
+            try:
+                _disc_cost, _ = session.run(
+                    [disc_cost, disc_train_op],
+                    feed_dict={real_inputs_discrete:_data}
+                )
+            except:
+                print("outtadata, reroll")
+                session.run(iterator.initializer)
+                
+                
         print("making plots..")
         lib.plot.output_dir = args.output_dir
         lib.plot.plot('time', time.time() - start_time)
