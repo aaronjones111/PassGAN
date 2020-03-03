@@ -114,6 +114,7 @@ def splitter(wordline):
     return t
 
 if args.shard_data:
+    print("Shard mode")
     files = tf.data.Dataset.list_files(args.shard_data+"*")
     lines = files.interleave(lambda x: tf.data.TextLineDataset(x), cycle_length=20) #cyclelength is number of cuncurrent files to read
 else:
@@ -311,12 +312,12 @@ with tf.Session() as session:
         start_time = time.time()
 
         # Train generator
-        print("Training Generator")
+        #print("############ Start of epock loop block ##################")
         if iteration > 0:
             _ = session.run(gen_train_op)
 
         # Train critic
-        print("Training Critic")
+        #print("Training Critic")
         for i in range(args.critic_iters):
             _data = next(gen)
             #print(_data)
@@ -330,28 +331,40 @@ with tf.Session() as session:
                 session.run(iterator.initializer)
                 
                 
-        print("making plots..")
+        #print("making plots..")
         lib.plot.output_dir = args.output_dir
         lib.plot.plot('time', time.time() - start_time)
         lib.plot.plot('train disc cost', _disc_cost)
 
         # Output to text file after every 100 samples
-        if iteration % 100 == 0 and iteration > 0:
+        if iteration % 1000 == 0 and iteration > 0:
+            print("sampling foriteration {}...".format(iteration))
+            session.run(iterator.initializer)
 
             samples = []
             for i in range(10):
                 samples.extend(generate_samples())
 
+            print("Tokenizing loop...")
             for i in range(4):
+                print("ngram genny for {} ngrams".format(i))
                 lm = utils.NgramLanguageModel(i+1, samples, tokenize=False)
+                print("plotting")
                 lib.plot.plot('js{}'.format(i+1), lm.js_with(true_char_ngram_lms[i]))
-
+                print("plot for {} done".format(i))
+            print("Done with tokening loop...")
+            
+            print("writing samples")
             with open(os.path.join(args.output_dir, 'samples', 'samples_{}.txt').format(iteration), 'w', encoding="utf-8") as f:
+                print("Saving {} samples".format(len(samples)))
                 for s in samples:
                     s = "".join(s)
                     f.write(s + "\n")
+            
+            print("Done sampling!")
 
         if iteration % args.save_every == 0 and iteration > 0:
+
             model_saver = tf.train.Saver()
             model_saver.save(session, os.path.join(args.output_dir, 'checkpoints', 'checkpoint_{}.ckpt').format(iteration))
             print("{} / {} ({}%)".format(iteration, args.iters, iteration/args.iters*100.0 ))
@@ -360,9 +373,11 @@ with tf.Session() as session:
             print("...Training done.")
         
         if iteration % 100 == 0:
+            print("Libplot flush") #does this need to <= the plotting?
             lib.plot.flush()
 
         lib.plot.tick()
+        #print("############ End of epock loop block ################## \n")
 # Time stamp
 localtime = time.asctime( time.localtime(time.time()) )
 print("Ending TensorFlow session.")
